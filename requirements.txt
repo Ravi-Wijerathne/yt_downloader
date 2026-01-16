@@ -1,0 +1,9 @@
+# YouTube Downloader Requirements
+# Install with: pip install -r requirements.txt
+
+# Core dependencies
+yt-dlp>=2024.1.0
+PyQt6>=6.6.0
+
+# For building executable
+pyinstaller>=6.0.0
