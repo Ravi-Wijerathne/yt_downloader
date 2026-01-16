@@ -58,7 +58,7 @@ class YouTubeDownloader:
         self.is_cancelled = False
         
     def _get_ffmpeg_location(self) -> Optional[str]:
-        """Get FFmpeg location, checking bundled version first"""
+        """Get FFmpeg location, checking bundled version first, then common paths"""
         if self.ffmpeg_path and os.path.exists(self.ffmpeg_path):
             return self.ffmpeg_path
             
@@ -72,7 +72,25 @@ class YouTubeDownloader:
             
         bundled_ffmpeg = os.path.join(base_path, 'ffmpeg')
         if os.path.exists(bundled_ffmpeg):
-            return bundled_ffmpeg
+            # Check if ffmpeg executable exists in the folder
+            ffmpeg_exe = os.path.join(bundled_ffmpeg, 'ffmpeg.exe' if sys.platform == 'win32' else 'ffmpeg')
+            if os.path.exists(ffmpeg_exe):
+                return bundled_ffmpeg
+        
+        # Check common installation paths on Windows
+        if sys.platform == 'win32':
+            common_paths = [
+                r'C:\ProgramData\chocolatey\bin',
+                r'C:\ffmpeg\bin',
+                os.path.expandvars(r'%LOCALAPPDATA%\Microsoft\WinGet\Links'),
+                os.path.expandvars(r'%USERPROFILE%\scoop\shims'),
+                r'C:\Program Files\ffmpeg\bin',
+                r'C:\Program Files (x86)\ffmpeg\bin',
+            ]
+            for path in common_paths:
+                ffmpeg_exe = os.path.join(path, 'ffmpeg.exe')
+                if os.path.exists(ffmpeg_exe):
+                    return path
             
         return None  # Use system FFmpeg
         
