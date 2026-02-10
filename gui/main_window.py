@@ -39,6 +39,8 @@ class DownloadWorker(QThread):
         self.quality: str = "best"
         self.output_format: str = "mp4"
         self.audio_only: bool = False
+        self.use_cookies_from_browser: bool = False
+        self.cookies_file: Optional[str] = None
         self.operation: str = "download"  # "download" or "info"
         
     def setup(
@@ -48,6 +50,8 @@ class DownloadWorker(QThread):
         quality: str = "best",
         output_format: str = "mp4",
         audio_only: bool = False,
+        use_cookies_from_browser: bool = False,
+        cookies_file: Optional[str] = None,
         operation: str = "download"
     ):
         """Setup download parameters"""
@@ -56,11 +60,17 @@ class DownloadWorker(QThread):
         self.quality = quality
         self.output_format = output_format
         self.audio_only = audio_only
+        self.use_cookies_from_browser = use_cookies_from_browser
+        self.cookies_file = cookies_file
         self.operation = operation
         
     def run(self):
         """Execute the download operation"""
-        self.downloader = YouTubeDownloader(output_path=self.output_path)
+        self.downloader = YouTubeDownloader(
+            output_path=self.output_path,
+            use_cookies_from_browser=self.use_cookies_from_browser,
+            cookies_file=self.cookies_file
+        )
         
         if self.operation == "info":
             self._fetch_info()
@@ -91,6 +101,10 @@ class DownloadWorker(QThread):
             self.log_message.emit(f"Starting download: {self.url}")
             self.log_message.emit(f"Quality: {self.quality}, Format: {self.output_format}")
             self.log_message.emit(f"Output: {self.output_path}")
+            if self.cookies_file:
+                self.log_message.emit("Using cookies file")
+            elif self.use_cookies_from_browser:
+                self.log_message.emit("Using browser cookies (Chrome/Edge)")
             
             download_type = DownloadType.AUDIO if self.audio_only else DownloadType.VIDEO
             
@@ -207,6 +221,17 @@ class MainWindow(QMainWindow):
         self.format_label = QLabel("Format:")
         self.format_combo = QComboBox()
         self._populate_format_combo()
+
+        # Cookies
+        self.cookies_checkbox = QCheckBox("Use browser cookies (Chrome/Edge)")
+        self.cookies_file_checkbox = QCheckBox("Use cookies.txt file")
+        self.cookies_file_input = QLineEdit()
+        self.cookies_file_input.setReadOnly(True)
+        self.cookies_file_input.setPlaceholderText("Select cookies.txt file...")
+        self.cookies_file_btn = QPushButton("📄 Browse")
+        self.cookies_file_btn.setFixedWidth(100)
+        self.cookies_file_input.setEnabled(False)
+        self.cookies_file_btn.setEnabled(False)
         
         # Output Location
         self.output_label = QLabel("Save to:")
@@ -341,8 +366,16 @@ class MainWindow(QMainWindow):
         self.output_input.setMinimumHeight(32)
         output_layout.addWidget(self.output_input)
         output_layout.addWidget(self.browse_btn)
-        options_layout.addWidget(self.output_label, 3, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        options_layout.addLayout(output_layout, 3, 1)
+        options_layout.addWidget(self.cookies_checkbox, 3, 0, 1, 2)
+        options_layout.addWidget(self.cookies_file_checkbox, 4, 0, 1, 2)
+        cookies_file_layout = QHBoxLayout()
+        cookies_file_layout.setSpacing(10)
+        self.cookies_file_input.setMinimumHeight(32)
+        cookies_file_layout.addWidget(self.cookies_file_input)
+        cookies_file_layout.addWidget(self.cookies_file_btn)
+        options_layout.addLayout(cookies_file_layout, 5, 1)
+        options_layout.addWidget(self.output_label, 6, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        options_layout.addLayout(output_layout, 6, 1)
         
         main_layout.addWidget(options_group)
         
@@ -396,6 +429,7 @@ class MainWindow(QMainWindow):
         self.clear_btn.clicked.connect(self._clear_url)
         self.analyze_btn.clicked.connect(self._analyze_url)
         self.browse_btn.clicked.connect(self._browse_output)
+        self.cookies_file_btn.clicked.connect(self._browse_cookies_file)
         self.download_btn.clicked.connect(self._start_download)
         self.cancel_btn.clicked.connect(self._cancel_download)
         self.add_queue_btn.clicked.connect(self._add_to_queue)
@@ -405,6 +439,7 @@ class MainWindow(QMainWindow):
         # Radio button changes
         self.video_radio.toggled.connect(self._on_type_changed)
         self.audio_radio.toggled.connect(self._on_type_changed)
+        self.cookies_file_checkbox.toggled.connect(self._on_cookies_file_toggled)
         
         # URL input changes
         self.url_input.textChanged.connect(self._on_url_changed)
@@ -477,6 +512,10 @@ class MainWindow(QMainWindow):
                 background-color: #3d3d3d;
                 color: #e0e0e0;
                 font-size: 13px;
+            }
+            QLineEdit:disabled {
+                background-color: #2b2b2b;
+                color: #b0b0b0;
             }
             QLineEdit:focus {
                 border: 1px solid #0078d4;
@@ -560,9 +599,44 @@ class MainWindow(QMainWindow):
                 color: #e0e0e0;
                 font-size: 12px;
             }
+            QCheckBox {
+                color: #e0e0e0;
+                font-size: 12px;
+            }
+            QCheckBox:disabled {
+                color: #9a9a9a;
+            }
             QRadioButton::indicator {
                 width: 16px;
                 height: 16px;
+            }
+            QRadioButton::indicator {
+                border: 1px solid #9a9a9a;
+                border-radius: 8px;
+                background-color: #2a2a2a;
+            }
+            QRadioButton::indicator:checked {
+                border: 1px solid #0078d4;
+                background-color: #0078d4;
+            }
+            QRadioButton::indicator:disabled {
+                border: 1px solid #666;
+                background-color: #242424;
+            }
+            QCheckBox::indicator {
+                width: 16px;
+                height: 16px;
+                border: 1px solid #9a9a9a;
+                border-radius: 3px;
+                background-color: #2a2a2a;
+            }
+            QCheckBox::indicator:checked {
+                border: 1px solid #0078d4;
+                background-color: #0078d4;
+            }
+            QCheckBox::indicator:disabled {
+                border: 1px solid #666;
+                background-color: #242424;
             }
             QListWidget {
                 border: 1px solid #3d3d3d;
@@ -631,6 +705,24 @@ class MainWindow(QMainWindow):
             self.output_path = folder
             self.output_input.setText(folder)
             self._log(f"Output folder set to: {folder}")
+
+    def _browse_cookies_file(self):
+        """Open cookies file browser dialog"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select cookies.txt file",
+            os.path.expanduser("~"),
+            "Cookies (*.txt);;All Files (*)"
+        )
+        if file_path:
+            self.cookies_file_input.setText(file_path)
+            self.cookies_file_checkbox.setChecked(True)
+            self._log("Cookies file selected")
+
+    def _on_cookies_file_toggled(self, checked: bool):
+        """Enable/disable cookies file controls"""
+        self.cookies_file_input.setEnabled(checked)
+        self.cookies_file_btn.setEnabled(checked)
             
     def _analyze_url(self):
         """Analyze the YouTube URL"""
@@ -684,6 +776,10 @@ class MainWindow(QMainWindow):
         quality = self.quality_combo.currentData()
         output_format = self.format_combo.currentData()
         audio_only = self.audio_radio.isChecked()
+        cookies_file = self.cookies_file_input.text().strip() if self.cookies_file_checkbox.isChecked() else None
+        if self.cookies_file_checkbox.isChecked() and not cookies_file:
+            self._show_error("Please select a cookies.txt file or disable cookies file option")
+            return
         
         self._set_ui_state(downloading=True)
         self._log("Starting download...")
@@ -696,6 +792,8 @@ class MainWindow(QMainWindow):
             quality=quality,
             output_format=output_format,
             audio_only=audio_only,
+            use_cookies_from_browser=self.cookies_checkbox.isChecked(),
+            cookies_file=cookies_file,
             operation="download"
         )
         self.download_worker.progress_update.connect(self._on_progress_update)
@@ -793,6 +891,10 @@ class MainWindow(QMainWindow):
         self.browse_btn.setEnabled(not busy)
         self.video_radio.setEnabled(not busy)
         self.audio_radio.setEnabled(not busy)
+        self.cookies_checkbox.setEnabled(not busy)
+        self.cookies_file_checkbox.setEnabled(not busy)
+        self.cookies_file_input.setEnabled(not busy and self.cookies_file_checkbox.isChecked())
+        self.cookies_file_btn.setEnabled(not busy and self.cookies_file_checkbox.isChecked())
         self.add_queue_btn.setEnabled(not busy)
         self.download_queue_btn.setEnabled(not busy and not self.download_queue.is_empty)
         
