@@ -2,7 +2,7 @@
 # Install with: pip install -r requirements.txt
 
 # Core dependencies
-yt-dlp>=2024.1.0
+yt-dlp[default]>=2026.1.0
 PyQt6>=6.6.0
 
 # For building executable

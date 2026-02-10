@@ -193,6 +193,7 @@ def verify_dependencies() -> tuple[bool, list]:
     """
     required_packages = [
         ('yt-dlp', 'yt_dlp'),
+        ('yt-dlp-ejs', 'yt_dlp_ejs'),
         ('PyQt6', 'PyQt6'),
     ]
     

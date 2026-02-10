@@ -5,6 +5,7 @@ Handles all yt-dlp operations for downloading videos and audio
 
 import os
 import sys
+import shutil
 import yt_dlp
 from typing import Optional, Callable, Dict, Any, List
 from dataclasses import dataclass
@@ -44,16 +45,26 @@ class YouTubeDownloader:
     Main downloader class that wraps yt-dlp functionality
     """
     
-    def __init__(self, output_path: str = None, ffmpeg_path: str = None):
+    def __init__(
+        self,
+        output_path: str = None,
+        ffmpeg_path: str = None,
+        use_cookies_from_browser: bool = False,
+        cookies_file: Optional[str] = None
+    ):
         """
         Initialize the downloader
         
         Args:
             output_path: Directory to save downloaded files
             ffmpeg_path: Path to FFmpeg binary (optional)
+            use_cookies_from_browser: Use browser cookies for restricted content
+            cookies_file: Path to cookies.txt file
         """
         self.output_path = output_path or os.path.join(os.path.expanduser("~"), "Downloads")
         self.ffmpeg_path = ffmpeg_path
+        self.use_cookies_from_browser = use_cookies_from_browser
+        self.cookies_file = cookies_file
         self.current_process: Optional[yt_dlp.YoutubeDL] = None
         self.is_cancelled = False
         
@@ -106,6 +117,19 @@ class YouTubeDownloader:
             'geo_bypass': True,
             'nocheckcertificate': True,
         }
+
+        # Enable JS runtimes for YouTube EJS challenge solving
+        options['js_runtimes'] = self._get_js_runtimes()
+
+        # Allow yt-dlp to download EJS scripts from GitHub as fallback
+        options['remote_components'] = {'ejs:github'}
+
+        if self.cookies_file and os.path.exists(self.cookies_file):
+            options['cookiefile'] = self.cookies_file
+        elif self.use_cookies_from_browser:
+            browser = self._detect_browser_for_cookies()
+            if browser:
+                options['cookiesfrombrowser'] = (browser,)
         
         ffmpeg_location = self._get_ffmpeg_location()
         if ffmpeg_location:
@@ -115,6 +139,63 @@ class YouTubeDownloader:
             options['progress_hooks'] = [progress_hook]
             
         return options
+
+    def _get_js_runtimes(self) -> Dict[str, Dict[str, str]]:
+        """
+        Detect available JavaScript runtimes for yt-dlp EJS challenge solving.
+        Always includes deno (yt-dlp default). Adds node/bun if found on PATH.
+
+        Returns:
+            Dict of js runtime configs keyed by runtime name.
+        """
+        runtimes: Dict[str, Dict[str, str]] = {}
+
+        # Always enable deno (yt-dlp default)
+        deno_path = shutil.which('deno')
+        runtimes['deno'] = {'path': deno_path} if deno_path else {}
+
+        # Enable node if available (must be explicitly enabled)
+        node_path = shutil.which('node')
+        if node_path:
+            runtimes['node'] = {'path': node_path}
+
+        # Enable bun if available
+        bun_path = shutil.which('bun')
+        if bun_path:
+            runtimes['bun'] = {'path': bun_path}
+
+        return runtimes
+
+    def _detect_browser_for_cookies(self) -> Optional[str]:
+        """
+        Detect a supported browser for cookies (Chrome/Edge).
+
+        Returns:
+            Browser name for yt-dlp cookiesfrombrowser or None.
+        """
+        browsers = [
+            ('chrome', [
+                os.path.expandvars(r'%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe'),
+                os.path.expandvars(r'%PROGRAMFILES%\Google\Chrome\Application\chrome.exe'),
+                os.path.expandvars(r'%PROGRAMFILES(X86)%\Google\Chrome\Application\chrome.exe'),
+            ]),
+            ('edge', [
+                os.path.expandvars(r'%PROGRAMFILES%\Microsoft\Edge\Application\msedge.exe'),
+                os.path.expandvars(r'%PROGRAMFILES(X86)%\Microsoft\Edge\Application\msedge.exe'),
+            ]),
+        ]
+
+        for browser, paths in browsers:
+            for path in paths:
+                if path and os.path.exists(path):
+                    return browser
+
+        if shutil.which('chrome'):
+            return 'chrome'
+        if shutil.which('msedge'):
+            return 'edge'
+
+        return None
     
     def detect_video_type(self, url: str) -> VideoType:
         """
@@ -153,6 +234,17 @@ class YouTubeDownloader:
             'extract_flat': False,
             'skip_download': True,
         }
+
+        # Enable JS runtimes for YouTube EJS challenge solving
+        options['js_runtimes'] = self._get_js_runtimes()
+        options['remote_components'] = {'ejs:github'}
+
+        if self.cookies_file and os.path.exists(self.cookies_file):
+            options['cookiefile'] = self.cookies_file
+        elif self.use_cookies_from_browser:
+            browser = self._detect_browser_for_cookies()
+            if browser:
+                options['cookiesfrombrowser'] = (browser,)
         
         try:
             with yt_dlp.YoutubeDL(options) as ydl:
@@ -223,7 +315,7 @@ class YouTubeDownloader:
         
         if audio_only or download_type == DownloadType.AUDIO:
             # Audio only download
-            options['format'] = 'bestaudio/best'
+            options['format'] = self._build_audio_format_string()
             options['postprocessors'] = [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': output_format if output_format in ['mp3', 'aac', 'wav', 'flac', 'm4a'] else 'mp3',
@@ -254,7 +346,13 @@ class YouTubeDownloader:
         except yt_dlp.utils.DownloadError as e:
             error_msg = str(e).lower()
             
-            if 'private video' in error_msg:
+            # On 403 Forbidden, retry with a more permissive format string
+            if '403' in error_msg and 'forbidden' in error_msg:
+                return self._retry_with_fallback_format(
+                    url, options, audio_only or download_type == DownloadType.AUDIO,
+                    output_format
+                )
+            elif 'private video' in error_msg:
                 raise DownloadError("This video is private and cannot be downloaded.")
             elif 'age' in error_msg and 'restricted' in error_msg:
                 raise DownloadError("This video is age-restricted. Please try logging in.")
@@ -271,10 +369,47 @@ class YouTubeDownloader:
             raise DownloadError(f"Unexpected error: {str(e)}")
         finally:
             self.current_process = None
+
+    def _retry_with_fallback_format(
+        self,
+        url: str,
+        options: Dict[str, Any],
+        is_audio: bool,
+        output_format: str
+    ) -> bool:
+        """
+        Retry download with a more permissive format on 403 errors.
+        YouTube's SABR streaming can restrict certain format combinations.
+        """
+        if self.is_cancelled:
+            return False
+
+        if is_audio:
+            fallback_format = 'bestaudio/best'
+        else:
+            fallback_format = 'best'
+
+        options['format'] = fallback_format
+
+        try:
+            with yt_dlp.YoutubeDL(options) as ydl:
+                self.current_process = ydl
+                ydl.download([url])
+                return True
+        except yt_dlp.utils.DownloadError as e:
+            raise DownloadError(f"Download failed: {str(e)}")
+        except Exception as e:
+            if self.is_cancelled:
+                return False
+            raise DownloadError(f"Unexpected error: {str(e)}")
+        finally:
+            self.current_process = None
             
     def _build_format_string(self, quality: str, output_format: str) -> str:
         """
-        Build yt-dlp format string based on quality preference
+        Build yt-dlp format string based on quality preference.
+        Uses height-based selection instead of hardcoded format IDs to avoid
+        403 errors from SABR-restricted streams.
         
         Args:
             quality: Quality string (144p, 240p, 360p, 480p, 720p, 1080p, 1440p, 2160p, best)
@@ -283,25 +418,36 @@ class YouTubeDownloader:
         Returns:
             yt-dlp format string
         """
-        quality_map = {
-            '144p': '160',
-            '240p': '133',
-            '360p': '134',
-            '480p': '135',
-            '720p': '136',
-            '1080p': '137',
-            '1440p': '271',
-            '2160p': '313',
-            '4320p': '272',  # 8K
-        }
-        
         if quality == 'best':
-            return f'bestvideo[ext={output_format}]+bestaudio/bestvideo+bestaudio/best'
-        elif quality in quality_map:
+            # Prefer protocol=https to avoid SABR-restricted formats
+            return (
+                f'bestvideo[protocol=https]+bestaudio[protocol=https]'
+                f'/bestvideo+bestaudio/best'
+            )
+        elif quality.endswith('p'):
             height = quality.replace('p', '')
-            return f'bestvideo[height<={height}]+bestaudio/best[height<={height}]'
+            return (
+                f'bestvideo[height<={height}][protocol=https]+bestaudio[protocol=https]'
+                f'/bestvideo[height<={height}]+bestaudio'
+                f'/best[height<={height}]'
+            )
         else:
             return 'bestvideo+bestaudio/best'
+
+    def _build_audio_format_string(self) -> str:
+        """
+        Build audio format string, preferring protocols and codecs that
+        are less likely to be SABR-restricted (403 errors).
+
+        Returns:
+            yt-dlp format string
+        """
+        return (
+            'bestaudio[ext=m4a][protocol=https]'
+            '/bestaudio[acodec^=mp4a][protocol=https]'
+            '/bestaudio[protocol=https]'
+            '/bestaudio/best'
+        )
     
     def cancel(self):
         """Cancel the current download"""
@@ -351,7 +497,7 @@ class YouTubeDownloader:
         )
         
         if audio_only or download_type == DownloadType.AUDIO:
-            options['format'] = 'bestaudio/best'
+            options['format'] = self._build_audio_format_string()
             options['postprocessors'] = [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': output_format if output_format in ['mp3', 'aac', 'wav', 'flac', 'm4a'] else 'mp3',
