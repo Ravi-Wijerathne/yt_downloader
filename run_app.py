@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
 YouTube Downloader - Automated Runner
-Checks dependencies, installs them if missing, and launches the application.
+Creates a virtual environment, installs dependencies, and launches the application.
 
 Run this script to start the YouTube Downloader application.
+It will automatically set up a venv if one doesn't exist.
 """
 
 import sys
@@ -12,6 +13,7 @@ import subprocess
 import importlib
 import platform
 import shutil
+import venv
 
 # ANSI color codes for terminal output
 class Colors:
@@ -29,6 +31,80 @@ if platform.system() == 'Windows':
 
 # Project root directory
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+
+# Virtual environment directory
+VENV_DIR = os.path.join(PROJECT_ROOT, '.venv')
+
+
+def _get_venv_python() -> str:
+    """Get the path to the Python executable inside the venv."""
+    if platform.system() == 'Windows':
+        return os.path.join(VENV_DIR, 'Scripts', 'python.exe')
+    return os.path.join(VENV_DIR, 'bin', 'python')
+
+
+def _is_running_in_venv() -> bool:
+    """Check if the current interpreter is the venv's Python."""
+    venv_python = os.path.realpath(_get_venv_python())
+    current_python = os.path.realpath(sys.executable)
+    return current_python == venv_python
+
+
+def _ensure_venv_and_relaunch():
+    """
+    Ensure the venv exists, then re-launch this script inside it.
+    This function is called when we detect we are NOT running inside the venv.
+    It never returns — it replaces the current process (or exits with the child's code).
+    """
+    print(f"\n{Colors.CYAN}{'='*60}{Colors.END}")
+    print(f"{Colors.BOLD}{Colors.CYAN}   YouTube Downloader - Automated Launcher{Colors.END}")
+    print(f"{Colors.CYAN}{'='*60}{Colors.END}\n")
+
+    # --- Check Python version early (before creating venv) ---
+    version = sys.version_info
+    if not (version.major >= 3 and version.minor >= 11):
+        print(f"  {Colors.RED}✗ Python 3.11+ required (found {version.major}.{version.minor}){Colors.END}")
+        print(f"\n{Colors.RED}Please install Python 3.11 or higher.{Colors.END}")
+        sys.exit(1)
+    print(f"  {Colors.GREEN}✓ Python {version.major}.{version.minor}.{version.micro}{Colors.END}")
+
+    # --- Create venv if it doesn't exist ---
+    venv_python = _get_venv_python()
+    if not os.path.isfile(venv_python):
+        print(f"\n{Colors.BLUE}{Colors.BOLD}▸ Creating Virtual Environment{Colors.END}")
+        print(f"  {'-'*40}")
+        print(f"  {Colors.BLUE}⟳{Colors.END} {Colors.BLUE}Creating venv at .venv ...{Colors.END}")
+        try:
+            venv.create(VENV_DIR, with_pip=True)
+            print(f"  {Colors.GREEN}✓{Colors.END} {Colors.GREEN}Virtual environment created{Colors.END}")
+        except Exception as e:
+            print(f"  {Colors.RED}✗{Colors.END} {Colors.RED}Failed to create venv: {e}{Colors.END}")
+            sys.exit(1)
+    else:
+        print(f"\n{Colors.BLUE}{Colors.BOLD}▸ Virtual Environment{Colors.END}")
+        print(f"  {'-'*40}")
+        print(f"  {Colors.GREEN}✓{Colors.END} {Colors.GREEN}Virtual environment found at .venv{Colors.END}")
+
+    # --- Re-launch this same script inside the venv ---
+    print(f"\n  {Colors.BLUE}⟳{Colors.END} {Colors.BLUE}Re-launching inside venv ...{Colors.END}\n")
+
+    script = os.path.abspath(__file__)
+    result = subprocess.run([venv_python, script] + sys.argv[1:])
+    sys.exit(result.returncode)
+
+
+# ─── If we are NOT in the venv, bootstrap it and re-launch ────────────────────
+if __name__ == "__main__" and not _is_running_in_venv():
+    try:
+        _ensure_venv_and_relaunch()
+    except KeyboardInterrupt:
+        print(f"\n\n{Colors.YELLOW}Interrupted by user.{Colors.END}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n{Colors.RED}Unexpected error: {str(e)}{Colors.END}")
+        sys.exit(1)
+
+# ─── Everything below runs INSIDE the venv ────────────────────────────────────
 
 
 def print_header():
@@ -268,8 +344,11 @@ def run_application():
 
 
 def main():
-    """Main function - check dependencies and run application"""
+    """Main function - check dependencies and run application (runs inside venv)"""
     print_header()
+    
+    print_status(f"Running inside venv: {VENV_DIR}", "success")
+    print_status(f"Python: {sys.executable}", "info")
     
     # Step 1: Check Python version
     print_section("Checking Python Version")
@@ -308,7 +387,8 @@ def main():
             print(f"\n{Colors.RED}Failed to install required dependencies:{Colors.END}")
             for pkg in still_missing:
                 print(f"   - {pkg}")
-            print(f"\n{Colors.YELLOW}Try manually running: pip install -r requirements.txt{Colors.END}")
+            print(f"\n{Colors.YELLOW}Try manually running:{Colors.END}")
+            print(f"  {_get_venv_python()} -m pip install -r requirements.txt")
             return 1
     
     # Step 5: Check FFmpeg
@@ -331,7 +411,7 @@ def main():
             return 1
     
     # Step 6: All checks passed - run the application
-    print(f"\n{Colors.GREEN}{Colors.BOLD}✅ All checks passed!{Colors.END}")
+    print(f"\n{Colors.GREEN}{Colors.BOLD}All checks passed!{Colors.END}")
     
     # Run the application
     run_application()
