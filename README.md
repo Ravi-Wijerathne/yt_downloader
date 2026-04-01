@@ -56,6 +56,20 @@ pip install -r requirements.txt
 python main.py
 ```
 
+## Running Tests
+
+After activating your virtual environment, run:
+
+```bash
+python -m pytest
+```
+
+To run tests with coverage:
+
+```bash
+python -m pytest --cov=core --cov=gui --cov=main --cov=run_app --cov=check_prerequisites --cov-report=term-missing
+```
+
 ## Supported URLs
 
 - YouTube videos: `https://www.youtube.com/watch?v=...`

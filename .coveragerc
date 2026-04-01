@@ -1,0 +1,16 @@
+[run]
+branch = True
+source =
+    core
+    gui
+    main
+    run_app
+    check_prerequisites
+
+[report]
+show_missing = True
+skip_covered = False
+precision = 1
+omit =
+    */tests/*
+    */__pycache__/*

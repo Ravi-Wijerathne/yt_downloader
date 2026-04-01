@@ -74,3 +74,5 @@ downloads/
 *.m4a
 *.webm
 *.mkv
+
+TESTING_PLAN.md
