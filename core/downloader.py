@@ -80,13 +80,21 @@ class YouTubeDownloader:
         else:
             # Running as script
             base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            
-        bundled_ffmpeg = os.path.join(base_path, 'ffmpeg')
-        if os.path.exists(bundled_ffmpeg):
-            # Check if ffmpeg executable exists in the folder
-            ffmpeg_exe = os.path.join(bundled_ffmpeg, 'ffmpeg.exe' if sys.platform == 'win32' else 'ffmpeg')
-            if os.path.exists(ffmpeg_exe):
-                return bundled_ffmpeg
+
+        bundled_roots = [
+            os.path.join(base_path, 'assets', 'ffmpeg', 'ffmpeg-8.0.1-essentials_build', 'bin'),
+            os.path.join(base_path, 'ffmpeg'),
+        ]
+
+        binary_names = ['ffmpeg.exe', 'ffmpeg'] if sys.platform == 'win32' else ['ffmpeg', 'ffmpeg.exe']
+        for bundled_ffmpeg in bundled_roots:
+            if not os.path.exists(bundled_ffmpeg):
+                continue
+
+            for binary_name in binary_names:
+                ffmpeg_exe = os.path.join(bundled_ffmpeg, binary_name)
+                if os.path.exists(ffmpeg_exe):
+                    return bundled_ffmpeg
         
         # Check common installation paths on Windows
         if sys.platform == 'win32':

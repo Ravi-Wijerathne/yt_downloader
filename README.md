@@ -30,7 +30,7 @@ A cross-platform YouTube video and audio downloader with a modern GUI built usin
 
 2. **Run the application:**
    ```bash
-   python run_app.py
+   python scripts/run_app.py
    ```
    
    The script will automatically:

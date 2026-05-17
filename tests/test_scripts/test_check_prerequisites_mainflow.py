@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import check_prerequisites as cp
+import scripts.check_prerequisites as cp
 
 
 @pytest.mark.unit

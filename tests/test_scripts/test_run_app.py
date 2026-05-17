@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import run_app
+import scripts.run_app as run_app
 
 
 @pytest.mark.unit

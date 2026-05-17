@@ -24,6 +24,11 @@ def check_dependencies():
         import yt_dlp
     except ImportError:
         missing.append("yt-dlp")
+
+    try:
+        import yt_dlp_ejs
+    except ImportError:
+        missing.append("yt-dlp-ejs")
         
     try:
         from PyQt6.QtWidgets import QApplication
@@ -45,14 +50,17 @@ def check_dependencies():
 def check_ffmpeg():
     """Check if FFmpeg is available"""
     import shutil
+
+    def _bundled_ffmpeg_paths():
+        return [
+            os.path.join(PROJECT_ROOT, 'assets', 'ffmpeg', 'ffmpeg-8.0.1-essentials_build', 'bin', 'ffmpeg.exe'),
+            os.path.join(PROJECT_ROOT, 'assets', 'ffmpeg', 'ffmpeg-8.0.1-essentials_build', 'bin', 'ffmpeg'),
+            os.path.join(PROJECT_ROOT, 'ffmpeg', 'ffmpeg.exe'),
+            os.path.join(PROJECT_ROOT, 'ffmpeg', 'ffmpeg'),
+        ]
     
     # Check bundled FFmpeg first
-    bundled_paths = [
-        os.path.join(PROJECT_ROOT, 'ffmpeg', 'ffmpeg.exe'),
-        os.path.join(PROJECT_ROOT, 'ffmpeg', 'ffmpeg'),
-    ]
-    
-    for path in bundled_paths:
+    for path in _bundled_ffmpeg_paths():
         if os.path.exists(path):
             return True
             
