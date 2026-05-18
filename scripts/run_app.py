@@ -14,6 +14,7 @@ import importlib
 import platform
 import shutil
 import venv
+from pathlib import PureWindowsPath
 
 
 class Colors:
@@ -38,7 +39,7 @@ VENV_DIR = os.path.join(PROJECT_ROOT, '.venv')
 def _get_venv_python() -> str:
     """Get the path to the Python executable inside the venv."""
     if platform.system() == 'Windows':
-        return os.path.join(VENV_DIR, 'Scripts', 'python.exe')
+        return str(PureWindowsPath(VENV_DIR) / 'Scripts' / 'python.exe')
     return os.path.join(VENV_DIR, 'bin', 'python')
 
 
