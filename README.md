@@ -19,6 +19,7 @@ A cross-platform YouTube video and audio downloader with a modern GUI built usin
 
 - Python 3.11 or higher
 - FFmpeg (required for merging audio/video and full functionality)
+- Git LFS if you want Git to download the bundled Windows FFmpeg executables
 
 ## Quick Start
 
@@ -55,6 +56,8 @@ pip install -r requirements.txt
 # Run the application
 python main.py
 ```
+
+If you are cloning on Windows and want the bundled FFmpeg binaries from this repository, install Git LFS first and run `git lfs pull` after cloning.
 
 ## Running Tests
 
