@@ -69,49 +69,24 @@ class YouTubeDownloader:
         self.is_cancelled = False
         
     def _get_ffmpeg_location(self) -> Optional[str]:
-        """Get FFmpeg location, checking bundled version first, then common paths"""
+        """Get FFmpeg location.
+
+        This application requires FFmpeg to be installed system-wide and on the
+        user's PATH. Unless an explicit `ffmpeg_path` was provided to the
+        constructor, we return None so that yt-dlp will use the system ffmpeg
+        executable found on PATH.
+        """
+        # If caller provided an explicit path, use it.
         if self.ffmpeg_path and os.path.exists(self.ffmpeg_path):
             return self.ffmpeg_path
-            
-        # Check bundled ffmpeg folder
-        if getattr(sys, 'frozen', False):
-            # Running as compiled executable
-            base_path = sys._MEIPASS
-        else:
-            # Running as script
-            base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-        bundled_roots = [
-            os.path.join(base_path, 'assets', 'ffmpeg', 'ffmpeg-8.0.1-essentials_build', 'bin'),
-            os.path.join(base_path, 'ffmpeg'),
-        ]
+        # Prefer the system-installed ffmpeg (on PATH). Returning None here
+        # lets yt-dlp discover the executable itself.
+        if shutil.which('ffmpeg'):
+            return None
 
-        binary_names = ['ffmpeg.exe', 'ffmpeg'] if sys.platform == 'win32' else ['ffmpeg', 'ffmpeg.exe']
-        for bundled_ffmpeg in bundled_roots:
-            if not os.path.exists(bundled_ffmpeg):
-                continue
-
-            for binary_name in binary_names:
-                ffmpeg_exe = os.path.join(bundled_ffmpeg, binary_name)
-                if os.path.exists(ffmpeg_exe):
-                    return bundled_ffmpeg
-        
-        # Check common installation paths on Windows
-        if sys.platform == 'win32':
-            common_paths = [
-                r'C:\ProgramData\chocolatey\bin',
-                r'C:\ffmpeg\bin',
-                os.path.expandvars(r'%LOCALAPPDATA%\Microsoft\WinGet\Links'),
-                os.path.expandvars(r'%USERPROFILE%\scoop\shims'),
-                r'C:\Program Files\ffmpeg\bin',
-                r'C:\Program Files (x86)\ffmpeg\bin',
-            ]
-            for path in common_paths:
-                ffmpeg_exe = os.path.join(path, 'ffmpeg.exe')
-                if os.path.exists(ffmpeg_exe):
-                    return path
-            
-        return None  # Use system FFmpeg
+        # No ffmpeg found; return None so caller can handle the missing tool.
+        return None
         
     def _get_base_options(self, progress_hook: Callable = None) -> Dict[str, Any]:
         """Get base yt-dlp options"""

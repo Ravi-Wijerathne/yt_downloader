@@ -46,10 +46,12 @@ def _get_venv_python() -> str:
 def _get_bundled_ffmpeg_candidates() -> list[str]:
     """Return likely FFmpeg binary locations bundled with the project."""
     binary_names = ['ffmpeg.exe', 'ffmpeg'] if platform.system() == 'Windows' else ['ffmpeg', 'ffmpeg.exe']
+    # Prefer project-level `ffmpeg/` folder so platform-native binaries are
+    # discovered before any architecture-specific assets bundles.
     bundle_roots = [
-        os.path.join(PROJECT_ROOT, 'assets', 'ffmpeg', 'ffmpeg-8.0.1-essentials_build', 'bin'),
-        os.path.join(PROJECT_ROOT, 'assets', 'ffmpeg'),
         os.path.join(PROJECT_ROOT, 'ffmpeg'),
+        os.path.join(PROJECT_ROOT, 'assets', 'ffmpeg'),
+        os.path.join(PROJECT_ROOT, 'assets', 'ffmpeg', 'ffmpeg-8.0.1-essentials_build', 'bin'),
     ]
 
     candidates = []
@@ -299,16 +301,12 @@ def _repair_pip_installation() -> bool:
 
 def check_ffmpeg() -> bool:
     """Check if FFmpeg is available"""
-    bundled_path = _find_bundled_ffmpeg()
-    if bundled_path:
-        print_status(f"FFmpeg found: {os.path.dirname(bundled_path)}", "success")
-        return True
-
+    # Require FFmpeg to be installed system-wide and available on PATH.
     if shutil.which('ffmpeg'):
         print_status("FFmpeg found in system PATH", "success")
         return True
 
-    print_status("FFmpeg not found (some features may not work)", "warning")
+    print_status("FFmpeg not found. FFmpeg is required for full functionality.", "error")
     return False
 
 
@@ -433,20 +431,12 @@ def main():
     print_section("Checking FFmpeg")
     ffmpeg_ok = check_ffmpeg()
     if not ffmpeg_ok:
-        print(f"\n{Colors.YELLOW}Note: FFmpeg is required for full functionality.{Colors.END}")
-        print(f"{Colors.YELLOW}The application will start, but some features may not work.{Colors.END}")
-
-        try:
-            response = input(f"\n{Colors.CYAN}Continue anyway? (y/n): {Colors.END}").strip().lower()
-            if response not in ('y', 'yes'):
-                print(f"\n{Colors.YELLOW}Please install FFmpeg and run this script again.{Colors.END}")
-                print("  Windows: winget install ffmpeg")
-                print("  macOS:   brew install ffmpeg")
-                print("  Linux:   sudo apt install ffmpeg")
-                return 1
-        except KeyboardInterrupt:
-            print(f"\n\n{Colors.YELLOW}Cancelled by user.{Colors.END}")
-            return 1
+        print(f"\n{Colors.RED}FFmpeg is required to run this application.\nPlease install FFmpeg using your package manager and re-run this script.{Colors.END}")
+        print("  Windows (Chocolatey): choco install ffmpeg -y")
+        print("  Windows (WinGet): winget install ffmpeg")
+        print("  macOS (Homebrew): brew install ffmpeg")
+        print("  Debian/Ubuntu: sudo apt update && sudo apt install -y ffmpeg")
+        return 1
 
     print(f"\n{Colors.GREEN}{Colors.BOLD}All checks passed!{Colors.END}")
 

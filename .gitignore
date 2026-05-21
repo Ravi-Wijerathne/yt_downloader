@@ -66,6 +66,7 @@ Thumbs.db
 ffmpeg/*.exe
 ffmpeg/ffmpeg
 ffmpeg/ffprobe
+ffmpeg/windows/*.exe
 
 # Downloaded files
 downloads/
