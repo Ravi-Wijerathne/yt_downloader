@@ -21,43 +21,45 @@ A cross-platform YouTube video and audio downloader with a modern GUI built usin
 - FFmpeg (required for merging audio/video and full functionality)
 - Git LFS if you want Git to download the bundled Windows FFmpeg executables
 
-## Quick Start
+## Installation & Setup
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/Ravi-Wijerathne/yt_downloader.git
-   cd yt_downloader
-   ```
-
-2. **Run the application:**
-   ```bash
-   python scripts/run_app.py
-   ```
-   
-   The script will automatically:
-   - Check all dependencies
-   - Install missing packages
-   - Verify FFmpeg installation
-   - Launch the application
-
-## Manual Setup
-
-If you prefer manual setup:
-
+### 1. Clone the repository:
 ```bash
-# Create virtual environment
-python -m venv venv
-venv\Scripts\activate  # Windows
-source venv/bin/activate  # Linux/macOS
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the application
-python main.py
+git clone https://github.com/Ravi-Wijerathne/yt_downloader.git
+cd yt_downloader
 ```
 
-If you are cloning on Windows and want the bundled FFmpeg binaries from this repository, install Git LFS first and run `git lfs pull` after cloning.
+### 2. Create and activate a virtual environment:
+- **macOS / Linux:**
+  ```bash
+  python3 -m venv .venv
+  source .venv/bin/activate
+  ```
+- **Windows:**
+  ```cmd
+  python -m venv .venv
+  .venv\Scripts\activate
+  ```
+
+### 3. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+*(If `pip` command is not recognized, run `.venv/bin/python -m pip install -r requirements.txt` on macOS/Linux or `.venv\Scripts\python.exe -m pip install -r requirements.txt` on Windows)*
+
+### 4. Install FFmpeg (Required):
+FFmpeg is required for merging audio/video streams and format conversion. Ensure `ffmpeg` is installed and accessible in your system `PATH`:
+- **macOS:** `brew install ffmpeg`
+- **Windows:** `choco install ffmpeg` or `winget install ffmpeg` (or use Git LFS if retrieving bundled Windows binaries: `git lfs pull`)
+- **Linux:** `sudo apt update && sudo apt install ffmpeg`
+
+## Running the Application
+
+Once dependencies are installed and your virtual environment is active:
+
+```bash
+python main.py
+```
 
 ## Running Tests
 
@@ -70,7 +72,7 @@ python -m pytest
 To run tests with coverage:
 
 ```bash
-python -m pytest --cov=core --cov=gui --cov=main --cov=run_app --cov=check_prerequisites --cov-report=term-missing
+python -m pytest --cov=core --cov=gui --cov=main --cov-report=term-missing
 ```
 
 ## Supported URLs
