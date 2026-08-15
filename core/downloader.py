@@ -185,7 +185,7 @@ class YouTubeDownloader:
         Detect if URL is a video, short, or playlist
         
         Args:
-            url: YouTube URL
+            url: YouTube or Facebook URL
             
         Returns:
             VideoType enum value
@@ -197,6 +197,8 @@ class YouTubeDownloader:
         elif 'list=' in url_lower:
             return VideoType.PLAYLIST
         elif 'youtube.com/watch' in url_lower or 'youtu.be/' in url_lower:
+            return VideoType.VIDEO
+        elif 'facebook.com/' in url_lower or 'fb.watch/' in url_lower:
             return VideoType.VIDEO
         else:
             return VideoType.UNKNOWN
