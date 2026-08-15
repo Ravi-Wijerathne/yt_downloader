@@ -166,7 +166,7 @@ class MainWindow(QMainWindow):
         
     def _setup_window(self):
         """Configure main window properties"""
-        self.setWindowTitle("YouTube Downloader")
+        self.setWindowTitle("Video Downloader")
         self.setMinimumSize(800, 700)
         self.resize(900, 750)
         
@@ -184,9 +184,9 @@ class MainWindow(QMainWindow):
     def _create_widgets(self):
         """Create all UI widgets"""
         # URL Input Section
-        self.url_label = QLabel("YouTube URL:")
+        self.url_label = QLabel("Video URL:")
         self.url_input = QLineEdit()
-        self.url_input.setPlaceholderText("Paste YouTube video or playlist URL here...")
+        self.url_input.setPlaceholderText("Paste video or playlist URL here...")
         
         self.paste_btn = QPushButton("📋 Paste")
         self.paste_btn.setFixedWidth(80)
@@ -725,14 +725,14 @@ class MainWindow(QMainWindow):
         self.cookies_file_btn.setEnabled(checked)
             
     def _analyze_url(self):
-        """Analyze the YouTube URL"""
+        """Analyze the URL"""
         url = self.url_input.text().strip()
         if not url:
-            self._show_error("Please enter a YouTube URL")
+            self._show_error("Please enter a Video URL")
             return
             
-        if not self._is_valid_youtube_url(url):
-            self._show_error("Invalid YouTube URL")
+        if not self._is_valid_url(url):
+            self._show_error("Invalid Video URL")
             return
             
         self._set_ui_state(analyzing=True)
@@ -934,18 +934,20 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, title, message)
         
     @staticmethod
-    def _is_valid_youtube_url(url: str) -> bool:
-        """Check if URL is a valid YouTube URL"""
-        youtube_patterns = [
+    def _is_valid_url(url: str) -> bool:
+        """Check if URL is a valid video URL"""
+        valid_patterns = [
             'youtube.com/watch',
             'youtube.com/shorts',
             'youtube.com/playlist',
             'youtu.be/',
             'youtube.com/embed',
-            'youtube.com/v/'
+            'youtube.com/v/',
+            'facebook.com/',
+            'fb.watch/'
         ]
         url_lower = url.lower()
-        return any(pattern in url_lower for pattern in youtube_patterns)
+        return any(pattern in url_lower for pattern in valid_patterns)
     
     @staticmethod
     def _format_duration(seconds: int) -> str:

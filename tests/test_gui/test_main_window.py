@@ -61,7 +61,7 @@ def test_invalid_url_in_analyze_shows_error(qtbot, monkeypatch):
     window._analyze_url()
 
     assert errors
-    assert "Invalid YouTube URL" in errors[0]
+    assert "Invalid Video URL" in errors[0]
 
 
 @pytest.mark.gui
@@ -127,8 +127,10 @@ def test_progress_update_updates_widgets(qtbot):
 
 
 @pytest.mark.gui
-def test_valid_youtube_url_patterns():
-    assert MainWindow._is_valid_youtube_url("https://youtube.com/watch?v=abc")
-    assert MainWindow._is_valid_youtube_url("https://youtu.be/abc")
-    assert MainWindow._is_valid_youtube_url("https://youtube.com/shorts/abc")
-    assert not MainWindow._is_valid_youtube_url("https://example.com/video")
+def test_valid_url_patterns():
+    assert MainWindow._is_valid_url("https://youtube.com/watch?v=abc")
+    assert MainWindow._is_valid_url("https://youtu.be/abc")
+    assert MainWindow._is_valid_url("https://youtube.com/shorts/abc")
+    assert MainWindow._is_valid_url("https://facebook.com/watch?v=123")
+    assert MainWindow._is_valid_url("https://fb.watch/123")
+    assert not MainWindow._is_valid_url("https://example.com/video")

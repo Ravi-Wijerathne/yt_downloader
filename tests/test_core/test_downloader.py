@@ -57,6 +57,8 @@ def test_detect_video_type_variants(downloader):
     assert downloader.detect_video_type("https://youtube.com/watch?v=abc") == VideoType.VIDEO
     assert downloader.detect_video_type("https://youtube.com/shorts/abc") == VideoType.SHORT
     assert downloader.detect_video_type("https://youtube.com/playlist?list=abc") == VideoType.PLAYLIST
+    assert downloader.detect_video_type("https://facebook.com/watch?v=123") == VideoType.VIDEO
+    assert downloader.detect_video_type("https://fb.watch/123") == VideoType.VIDEO
     assert downloader.detect_video_type("https://example.com") == VideoType.UNKNOWN
 
 

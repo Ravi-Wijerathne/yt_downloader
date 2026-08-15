@@ -1,6 +1,6 @@
-# YouTube Downloader
+# Video Downloader
 
-A cross-platform YouTube video and audio downloader with a modern GUI built using Python, yt-dlp, and PyQt6.
+A cross-platform video and audio downloader (supporting YouTube, Facebook, and more) with a modern GUI built using Python, yt-dlp, and PyQt6.
 
 ![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
 ![PyQt6](https://img.shields.io/badge/GUI-PyQt6-green.svg)
@@ -10,7 +10,7 @@ A cross-platform YouTube video and audio downloader with a modern GUI built usin
 
 - Download videos in various qualities (144p to 4K)
 - Extract audio as MP3, M4A, AAC, WAV, FLAC
-- Support for YouTube Shorts and playlists
+- Support for YouTube (Videos, Shorts, Playlists) and Facebook Videos
 - Real-time progress tracking
 - Queue system for multiple downloads
 - Modern dark theme GUI
@@ -81,10 +81,11 @@ python -m pytest --cov=core --cov=gui --cov=main --cov-report=term-missing
 - YouTube Shorts: `https://www.youtube.com/shorts/...`
 - Playlists: `https://www.youtube.com/playlist?list=...`
 - Shortened URLs: `https://youtu.be/...`
+- Facebook Videos: `https://facebook.com/watch?v=...` or `https://fb.watch/...`
 
 ## Usage
 
-1. Paste a YouTube URL into the URL field
+1. Paste a YouTube or Facebook URL into the URL field
 2. Click "Analyze" to fetch video information
 3. Select quality, format, and output location
 4. Click "Download" to start
