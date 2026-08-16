@@ -107,6 +107,11 @@ class YouTubeDownloader:
         # Allow yt-dlp to download EJS scripts from GitHub as fallback
         options['remote_components'] = {'ejs:github'}
 
+        # Override default player clients to bypass 403 Forbidden errors (e.g. from android_vr)
+        options['extractor_args'] = {
+            'youtube': {'player_client': ['android', 'web', 'tv']}
+        }
+
         if self.cookies_file and os.path.exists(self.cookies_file):
             options['cookiefile'] = self.cookies_file
         elif self.use_cookies_from_browser:
@@ -223,6 +228,11 @@ class YouTubeDownloader:
         # Enable JS runtimes for YouTube EJS challenge solving
         options['js_runtimes'] = self._get_js_runtimes()
         options['remote_components'] = {'ejs:github'}
+
+        # Override default player clients to bypass 403 Forbidden errors (e.g. from android_vr)
+        options['extractor_args'] = {
+            'youtube': {'player_client': ['android', 'web', 'tv']}
+        }
 
         if self.cookies_file and os.path.exists(self.cookies_file):
             options['cookiefile'] = self.cookies_file
