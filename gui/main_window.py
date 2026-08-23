@@ -67,10 +67,23 @@ class DownloadWorker(QThread):
         self.operation = operation
         self.video_type = video_type
         
+    def _get_ffmpeg_path(self) -> Optional[str]:
+        """Get the path to bundled ffmpeg if it exists"""
+        if getattr(sys, 'frozen', False):
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            
+        ffmpeg_dir = os.path.join(base_path, 'ffmpeg')
+        if os.path.exists(ffmpeg_dir):
+            return ffmpeg_dir
+        return None
+
     def run(self):
         """Execute the download operation"""
         self.downloader = YouTubeDownloader(
             output_path=self.output_path,
+            ffmpeg_path=self._get_ffmpeg_path(),
             use_cookies_from_browser=self.use_cookies_from_browser,
             cookies_file=self.cookies_file
         )
