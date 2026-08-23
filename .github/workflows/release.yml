@@ -80,7 +80,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           cd dist
-          zip -r ../${{ matrix.asset_name }} YTDownloader.app README_macOS.txt
+          zip -ry ../${{ matrix.asset_name }} YTDownloader.app README_macOS.txt
         shell: bash
 
       - name: Package Application (Linux)
