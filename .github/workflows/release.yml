@@ -69,12 +69,6 @@ jobs:
           echo "" >> dist/README_macOS.txt
           echo "Alternatively, you can right-click the application and select 'Open'." >> dist/README_macOS.txt
 
-      - name: Ad-hoc Code Sign (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          # Perform ad-hoc code signing to ensure structural integrity
-          codesign --force --deep -s - dist/YTDownloader.app
-
       - name: Package Application (Windows)
         if: runner.os == 'Windows'
         run: |
