@@ -11,7 +11,8 @@ def build():
     sep = os.pathsep
     
     args = [
-        "pyinstaller",
+        sys.executable,
+        "-m", "PyInstaller",
         "--noconfirm",
         "--windowed",
         "--name", "YTDownloader",
