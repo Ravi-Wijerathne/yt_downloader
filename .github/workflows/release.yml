@@ -1,0 +1,122 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: YTDownloader-Linux
+            asset_name: YTDownloader-Linux.tar.gz
+          - os: windows-latest
+            artifact_name: YTDownloader-Windows
+            asset_name: YTDownloader-Windows.zip
+          - os: macos-latest
+            artifact_name: YTDownloader-macOS
+            asset_name: YTDownloader-macOS.zip
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Set up FFmpeg (Windows)
+        if: runner.os == 'Windows'
+        uses: federicocarboni/setup-ffmpeg@v3
+        id: setup-ffmpeg
+
+      - name: Set up FFmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install ffmpeg
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build with PyInstaller
+        run: |
+          python scripts/build.py
+
+      - name: Create macOS Gatekeeper README
+        if: runner.os == 'macOS'
+        run: |
+          echo "macOS Gatekeeper Workaround" > dist/README_macOS.txt
+          echo "===========================" >> dist/README_macOS.txt
+          echo "Because this application is not signed with an Apple Developer Certificate," >> dist/README_macOS.txt
+          echo "macOS Gatekeeper might show a warning that the app is 'damaged' or cannot be opened." >> dist/README_macOS.txt
+          echo "To fix this, please run the following command in your Terminal before opening the app:" >> dist/README_macOS.txt
+          echo "" >> dist/README_macOS.txt
+          echo "xattr -cr /path/to/YTDownloader.app" >> dist/README_macOS.txt
+          echo "" >> dist/README_macOS.txt
+          echo "Alternatively, you can right-click the application and select 'Open'." >> dist/README_macOS.txt
+
+      - name: Package Application (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cd dist
+          powershell Compress-Archive -Path YTDownloader -DestinationPath ../${{ matrix.asset_name }}
+        shell: bash
+
+      - name: Package Application (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cd dist
+          zip -ry ../${{ matrix.asset_name }} YTDownloader.app README_macOS.txt
+        shell: bash
+
+      - name: Package Application (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cd dist
+          tar -czvf ../${{ matrix.asset_name }} YTDownloader
+        shell: bash
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.asset_name }}
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all workflow run artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/YTDownloader-Linux/YTDownloader-Linux.tar.gz
+            artifacts/YTDownloader-Windows/YTDownloader-Windows.zip
+            artifacts/YTDownloader-macOS/YTDownloader-macOS.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

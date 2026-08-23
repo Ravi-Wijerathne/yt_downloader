@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize
 from PyQt6.QtGui import QFont, QIcon, QClipboard, QAction, QPalette, QColor
 
-from core.downloader import YouTubeDownloader, DownloadType, DownloadError, VideoInfo
+from core.downloader import YouTubeDownloader, DownloadType, DownloadError, VideoInfo, VideoType
 from core.formats import FormatHandler
 from core.progress import ProgressHook, ProgressInfo, DownloadStatus, DownloadQueue
 
@@ -42,6 +42,7 @@ class DownloadWorker(QThread):
         self.use_cookies_from_browser: bool = False
         self.cookies_file: Optional[str] = None
         self.operation: str = "download"  # "download" or "info"
+        self.video_type: Optional[VideoType] = None
         
     def setup(
         self,
@@ -52,7 +53,8 @@ class DownloadWorker(QThread):
         audio_only: bool = False,
         use_cookies_from_browser: bool = False,
         cookies_file: Optional[str] = None,
-        operation: str = "download"
+        operation: str = "download",
+        video_type: Optional[VideoType] = None
     ):
         """Setup download parameters"""
         self.url = url
@@ -63,11 +65,25 @@ class DownloadWorker(QThread):
         self.use_cookies_from_browser = use_cookies_from_browser
         self.cookies_file = cookies_file
         self.operation = operation
+        self.video_type = video_type
         
+    def _get_ffmpeg_path(self) -> Optional[str]:
+        """Get the path to bundled ffmpeg if it exists"""
+        if getattr(sys, 'frozen', False):
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            
+        ffmpeg_dir = os.path.join(base_path, 'ffmpeg')
+        if os.path.exists(ffmpeg_dir):
+            return ffmpeg_dir
+        return None
+
     def run(self):
         """Execute the download operation"""
         self.downloader = YouTubeDownloader(
             output_path=self.output_path,
+            ffmpeg_path=self._get_ffmpeg_path(),
             use_cookies_from_browser=self.use_cookies_from_browser,
             cookies_file=self.cookies_file
         )
@@ -96,7 +112,10 @@ class DownloadWorker(QThread):
         """Execute download"""
         try:
             # Create progress hook
-            progress_hook = ProgressHook(self._on_progress)
+            progress_hook = ProgressHook(
+                callback=self._on_progress,
+                cancel_check=lambda: self.downloader.is_cancelled if self.downloader else False
+            )
             
             self.log_message.emit(f"Starting download: {self.url}")
             self.log_message.emit(f"Quality: {self.quality}, Format: {self.output_format}")
@@ -108,14 +127,24 @@ class DownloadWorker(QThread):
             
             download_type = DownloadType.AUDIO if self.audio_only else DownloadType.VIDEO
             
-            success = self.downloader.download(
-                url=self.url,
-                download_type=download_type,
-                quality=self.quality,
-                output_format=self.output_format,
-                progress_hook=progress_hook,
-                audio_only=self.audio_only
-            )
+            if self.video_type == VideoType.PLAYLIST or 'list=' in self.url.lower():
+                success = self.downloader.download_playlist(
+                    url=self.url,
+                    download_type=download_type,
+                    quality=self.quality,
+                    output_format=self.output_format,
+                    progress_hook=progress_hook,
+                    audio_only=self.audio_only
+                )
+            else:
+                success = self.downloader.download(
+                    url=self.url,
+                    download_type=download_type,
+                    quality=self.quality,
+                    output_format=self.output_format,
+                    progress_hook=progress_hook,
+                    audio_only=self.audio_only
+                )
             
             if success:
                 self.log_message.emit("Download completed successfully!")
@@ -153,6 +182,7 @@ class MainWindow(QMainWindow):
         self.download_worker: Optional[DownloadWorker] = None
         self.current_video_info: Optional[VideoInfo] = None
         self.download_queue = DownloadQueue()
+        self.is_queue_active = False
         
         # Default output path
         self.output_path = os.path.join(os.path.expanduser("~"), "Downloads")
@@ -794,7 +824,8 @@ class MainWindow(QMainWindow):
             audio_only=audio_only,
             use_cookies_from_browser=self.cookies_checkbox.isChecked(),
             cookies_file=cookies_file,
-            operation="download"
+            operation="download",
+            video_type=self.current_video_info.video_type if self.current_video_info else None
         )
         self.download_worker.progress_update.connect(self._on_progress_update)
         self.download_worker.download_complete.connect(self._on_download_complete)
@@ -804,6 +835,7 @@ class MainWindow(QMainWindow):
         
     def _cancel_download(self):
         """Cancel the current download"""
+        self.is_queue_active = False
         if self.download_worker:
             self.download_worker.cancel()
             self._log("Cancelling download...")
@@ -819,6 +851,25 @@ class MainWindow(QMainWindow):
         
     def _on_download_complete(self, success: bool, message: str):
         """Handle download completion"""
+        if self.is_queue_active:
+            if success:
+                self.download_queue.mark_current_complete()
+                # Update list widget checkmark
+                current_idx = self.download_queue.current_index - 1
+                if current_idx < self.queue_list.count():
+                    item = self.queue_list.item(current_idx)
+                    item.setText(item.text().replace("📹", "✅"))
+            else:
+                self.download_queue.mark_current_error()
+                current_idx = self.download_queue.current_index - 1
+                if current_idx < self.queue_list.count():
+                    item = self.queue_list.item(current_idx)
+                    item.setText(item.text().replace("📹", "❌"))
+                    
+            # Process next item regardless of success/failure
+            self._process_next_queue_item()
+            return
+
         self._set_ui_state(downloading=False)
         
         if success:
@@ -831,9 +882,19 @@ class MainWindow(QMainWindow):
             
     def _on_error(self, error: str):
         """Handle error"""
+        self._log(f"Error: {error}")
+        
+        if self.is_queue_active:
+            self.download_queue.mark_current_error()
+            current_idx = self.download_queue.current_index - 1
+            if current_idx < self.queue_list.count():
+                item = self.queue_list.item(current_idx)
+                item.setText(item.text().replace("📹", "❌"))
+            self._process_next_queue_item()
+            return
+            
         self._set_ui_state(downloading=False, analyzing=False)
         self._show_error(error)
-        self._log(f"Error: {error}")
         self.status_bar.showMessage("Error occurred")
         
     def _add_to_queue(self):
@@ -846,15 +907,18 @@ class MainWindow(QMainWindow):
         # Add to queue list
         title = self.current_video_info.title if self.current_video_info else url[:50]
         item = QListWidgetItem(f"📹 {title}")
-        item.setData(Qt.ItemDataRole.UserRole, {
-            'url': url,
+        options = {
             'quality': self.quality_combo.currentData(),
             'format': self.format_combo.currentData(),
-            'audio_only': self.audio_radio.isChecked()
-        })
+            'audio_only': self.audio_radio.isChecked(),
+            'use_cookies': self.cookies_checkbox.isChecked(),
+            'cookies_file': self.cookies_file_input.text().strip() if self.cookies_file_checkbox.isChecked() else None,
+            'video_type': self.current_video_info.video_type if self.current_video_info else None
+        }
+        item.setData(Qt.ItemDataRole.UserRole, options)
         self.queue_list.addItem(item)
         
-        self.download_queue.add(url)
+        self.download_queue.add(url, options)
         self.download_queue_btn.setEnabled(True)
         self._log(f"Added to queue: {title}")
         
@@ -866,6 +930,7 @@ class MainWindow(QMainWindow):
         self.queue_list.clear()
         self.download_queue.clear()
         self.download_queue_btn.setEnabled(False)
+        self.is_queue_active = False
         self._log("Queue cleared")
         
     def _download_queue(self):
@@ -875,8 +940,47 @@ class MainWindow(QMainWindow):
             return
             
         self._log("Starting queue download...")
-        # TODO: Implement queue download logic
-        self._show_info("Queue Download", "Queue download feature coming soon!")
+        self.is_queue_active = True
+        self._set_ui_state(downloading=True)
+        self._process_next_queue_item()
+
+    def _process_next_queue_item(self):
+        """Process next item in the download queue"""
+        if not self.is_queue_active:
+            return
+
+        item_data = self.download_queue.get_next()
+        if not item_data:
+            self.is_queue_active = False
+            self._set_ui_state(downloading=False)
+            self._show_info("Queue Complete", "All items in the queue have been downloaded!")
+            self.status_bar.showMessage("Queue download completed!")
+            self._clear_queue()
+            return
+
+        url = item_data['url']
+        opts = item_data['options']
+        
+        self._log(f"Processing queue item: {url}")
+        self.status_bar.showMessage(f"Queue: Downloading {self.download_queue.progress_text} - {url[:30]}...")
+        
+        self.download_worker = DownloadWorker(self)
+        self.download_worker.setup(
+            url=url,
+            output_path=self.output_path,
+            quality=opts.get('quality', 'best'),
+            output_format=opts.get('format', 'mp4'),
+            audio_only=opts.get('audio_only', False),
+            use_cookies_from_browser=opts.get('use_cookies', False),
+            cookies_file=opts.get('cookies_file'),
+            operation="download",
+            video_type=opts.get('video_type')
+        )
+        self.download_worker.progress_update.connect(self._on_progress_update)
+        self.download_worker.download_complete.connect(self._on_download_complete)
+        self.download_worker.error_occurred.connect(self._on_error)
+        self.download_worker.log_message.connect(self._log)
+        self.download_worker.start()
         
     def _set_ui_state(self, downloading: bool = False, analyzing: bool = False):
         """Set UI state based on current operation"""
