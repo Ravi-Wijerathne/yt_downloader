@@ -16,6 +16,7 @@ def build():
         "--noconfirm",
         "--windowed",
         "--name", "YTDownloader",
+        "--osx-bundle-identifier", "com.ytdownloader.app",
     ]
     
     # Ensure ffmpeg binaries are available locally
