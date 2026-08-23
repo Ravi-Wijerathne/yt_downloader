@@ -99,7 +99,10 @@ class DownloadWorker(QThread):
         """Execute download"""
         try:
             # Create progress hook
-            progress_hook = ProgressHook(self._on_progress)
+            progress_hook = ProgressHook(
+                callback=self._on_progress,
+                cancel_check=lambda: self.downloader.is_cancelled if self.downloader else False
+            )
             
             self.log_message.emit(f"Starting download: {self.url}")
             self.log_message.emit(f"Quality: {self.quality}, Format: {self.output_format}")
@@ -819,6 +822,7 @@ class MainWindow(QMainWindow):
         
     def _cancel_download(self):
         """Cancel the current download"""
+        self.is_queue_active = False
         if self.download_worker:
             self.download_worker.cancel()
             self._log("Cancelling download...")

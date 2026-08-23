@@ -95,14 +95,16 @@ class ProgressHook:
     and emits updates to a callback function
     """
     
-    def __init__(self, callback: Callable[[ProgressInfo], None] = None):
+    def __init__(self, callback: Callable[[ProgressInfo], None] = None, cancel_check: Callable[[], bool] = None):
         """
         Initialize progress hook
         
         Args:
             callback: Function to call with progress updates
+            cancel_check: Function to call to check if download should be cancelled
         """
         self.callback = callback
+        self.cancel_check = cancel_check
         self.start_time: Optional[float] = None
         self.current_file: str = ""
         self._last_update: float = 0
@@ -126,6 +128,9 @@ class ProgressHook:
             
     def _handle_downloading(self, data: Dict[str, Any]):
         """Handle downloading status update"""
+        if self.cancel_check and self.cancel_check():
+            raise Exception("Download cancelled")
+            
         current_time = time.time()
         
         # Rate limit updates
