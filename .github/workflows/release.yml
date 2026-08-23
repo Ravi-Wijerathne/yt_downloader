@@ -37,10 +37,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
 
-      - name: Set up FFmpeg (Windows & macOS)
-        if: runner.os != 'Linux'
+      - name: Set up FFmpeg (Windows)
+        if: runner.os == 'Windows'
         uses: federicocarboni/setup-ffmpeg@v3
         id: setup-ffmpeg
+
+      - name: Set up FFmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install ffmpeg
 
       - name: Install Python dependencies
         run: |
