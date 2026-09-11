@@ -234,3 +234,188 @@ def test_get_js_runtimes_detects_node_and_bun(monkeypatch, tmp_path):
     assert runtimes["deno"]["path"] == "C:/deno.exe"
     assert runtimes["node"]["path"] == "C:/node.exe"
     assert runtimes["bun"]["path"] == "C:/bun.exe"
+
+
+@pytest.mark.unit
+def test_get_ffmpeg_location_explicit_path(monkeypatch, tmp_path):
+    import core.downloader as module
+    yt = YouTubeDownloader(output_path=str(tmp_path), ffmpeg_path="C:/custom/ffmpeg.exe")
+    monkeypatch.setattr(module.os.path, "exists", lambda p: True if p == "C:/custom/ffmpeg.exe" else False)
+    assert yt._get_ffmpeg_location() == "C:/custom/ffmpeg.exe"
+
+@pytest.mark.unit
+def test_get_ffmpeg_location_system_path(monkeypatch, tmp_path):
+    import core.downloader as module
+    yt = YouTubeDownloader(output_path=str(tmp_path))
+    monkeypatch.setattr(module.os.path, "exists", lambda _: False)
+    monkeypatch.setattr(module.shutil, "which", lambda cmd: "C:/system/ffmpeg.exe" if cmd == "ffmpeg" else None)
+    assert yt._get_ffmpeg_location() is None
+
+@pytest.mark.unit
+def test_detect_browser_for_cookies_chrome_paths(monkeypatch, tmp_path):
+    import core.downloader as module
+    yt = YouTubeDownloader(output_path=str(tmp_path), use_cookies_from_browser=True)
+    monkeypatch.setattr(module.os.path, "exists", lambda p: True if "chrome.exe" in p else False)
+    assert yt._detect_browser_for_cookies() == "chrome"
+
+@pytest.mark.unit
+def test_detect_browser_for_cookies_edge_paths(monkeypatch, tmp_path):
+    import core.downloader as module
+    yt = YouTubeDownloader(output_path=str(tmp_path), use_cookies_from_browser=True)
+    monkeypatch.setattr(module.os.path, "exists", lambda p: True if "msedge.exe" in p else False)
+    assert yt._detect_browser_for_cookies() == "edge"
+
+@pytest.mark.unit
+def test_detect_browser_for_cookies_shutil_fallback(monkeypatch, tmp_path):
+    import core.downloader as module
+    yt = YouTubeDownloader(output_path=str(tmp_path), use_cookies_from_browser=True)
+    monkeypatch.setattr(module.os.path, "exists", lambda p: False)
+    monkeypatch.setattr(module.shutil, "which", lambda cmd: "path" if cmd == "msedge" else None)
+    assert yt._detect_browser_for_cookies() == "edge"
+
+@pytest.mark.unit
+def test_get_base_options_with_browser_cookies(monkeypatch, tmp_path):
+    yt = YouTubeDownloader(output_path=str(tmp_path), use_cookies_from_browser=True)
+    monkeypatch.setattr(yt, "_detect_browser_for_cookies", lambda: "chrome")
+    opts = yt._get_base_options()
+    assert opts["cookiesfrombrowser"] == ("chrome",)
+
+@pytest.mark.unit
+def test_get_base_options_with_ffmpeg_and_progress(monkeypatch, tmp_path):
+    yt = YouTubeDownloader(output_path=str(tmp_path))
+    monkeypatch.setattr(yt, "_get_ffmpeg_location", lambda: "C:/ffmpeg.exe")
+    def my_hook(d): pass
+    opts = yt._get_base_options(progress_hook=my_hook)
+    assert opts["ffmpeg_location"] == "C:/ffmpeg.exe"
+    assert opts["progress_hooks"] == [my_hook]
+
+@pytest.mark.unit
+def test_get_video_info_browser_cookies(monkeypatch, downloader):
+    downloader.use_cookies_from_browser = True
+    monkeypatch.setattr(downloader, "_detect_browser_for_cookies", lambda: "chrome")
+    FakeYoutubeDL.info_response = None
+    info = downloader.get_video_info("http://url")
+    assert FakeYoutubeDL.last_options["cookiesfrombrowser"] == ("chrome",)
+    assert info is None
+
+@pytest.mark.unit
+def test_get_video_info_unexpected_error(downloader):
+    FakeYoutubeDL.should_raise = Exception("random failure")
+    with pytest.raises(DownloadError, match="Unexpected error: random failure"):
+        downloader.get_video_info("http://url")
+
+@pytest.mark.unit
+def test_get_available_formats(downloader, sample_video_info_dict):
+    FakeYoutubeDL.info_response = sample_video_info_dict
+    formats = downloader.get_available_formats("http://url")
+    assert len(formats) == 3
+    FakeYoutubeDL.info_response = None
+    assert downloader.get_available_formats("http://url") == []
+
+@pytest.mark.unit
+def test_download_cancelled_early(downloader):
+    class CancelYDL(FakeYoutubeDL):
+        def __enter__(self):
+            downloader.cancel()
+            return super().__enter__()
+    
+    import core.downloader as module
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(module.yt_dlp, "YoutubeDL", CancelYDL)
+    monkeypatch.setattr(module.yt_dlp, "utils", SimpleNamespace(DownloadError=FakeYtDlpError))
+    
+    try:
+        ok = downloader.download("http://url")
+        assert ok is False
+    finally:
+        monkeypatch.undo()
+
+@pytest.mark.unit
+def test_download_unexpected_error(downloader):
+    FakeYoutubeDL.should_raise = Exception("unexpected")
+    with pytest.raises(DownloadError, match="Unexpected error: unexpected"):
+        downloader.download("http://url")
+
+@pytest.mark.unit
+def test_download_unexpected_error_cancelled(downloader):
+    class CancelThenRaiseYDL(FakeYoutubeDL):
+        def download(self, urls):
+            downloader.cancel()
+            raise Exception("unexpected")
+    
+    import core.downloader as module
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(module.yt_dlp, "YoutubeDL", CancelThenRaiseYDL)
+    monkeypatch.setattr(module.yt_dlp, "utils", SimpleNamespace(DownloadError=FakeYtDlpError))
+    
+    try:
+        ok = downloader.download("http://url")
+        assert ok is False
+    finally:
+        monkeypatch.undo()
+
+@pytest.mark.unit
+def test_retry_fallback_cancelled_early(downloader):
+    downloader.is_cancelled = True
+    assert downloader._retry_with_fallback_format("http://url", {}, True, "mp3") is False
+
+@pytest.mark.unit
+def test_retry_fallback_unexpected_error(downloader):
+    FakeYoutubeDL.should_raise = Exception("unexpected fallback")
+    with pytest.raises(DownloadError, match="Unexpected error: unexpected fallback"):
+        downloader._retry_with_fallback_format("http://url", {}, False, "mp4")
+
+@pytest.mark.unit
+def test_retry_fallback_unexpected_error_cancelled(downloader):
+    class CancelThenRaiseYDL(FakeYoutubeDL):
+        def download(self, urls):
+            downloader.cancel()
+            raise Exception("unexpected")
+    
+    import core.downloader as module
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(module.yt_dlp, "YoutubeDL", CancelThenRaiseYDL)
+    monkeypatch.setattr(module.yt_dlp, "utils", SimpleNamespace(DownloadError=FakeYtDlpError))
+    
+    try:
+        ok = downloader._retry_with_fallback_format("http://url", {}, True, "mp3")
+        assert ok is False
+    finally:
+        monkeypatch.undo()
+
+@pytest.mark.unit
+def test_download_playlist_no_items_and_audio(downloader):
+    success = downloader.download_playlist(
+        url="https://youtube.com/playlist?list=abc",
+        download_type=DownloadType.AUDIO,
+        audio_only=True,
+    )
+    assert success is True
+    assert "playlist_items" not in FakeYoutubeDL.last_options
+    processors = FakeYoutubeDL.last_options["postprocessors"]
+    assert processors[0]["key"] == "FFmpegExtractAudio"
+
+@pytest.mark.unit
+def test_download_playlist_unexpected_error(downloader):
+    FakeYoutubeDL.should_raise = Exception("playlist err")
+    with pytest.raises(DownloadError, match="Playlist download failed: playlist err"):
+        downloader.download_playlist("http://url")
+
+@pytest.mark.unit
+def test_download_playlist_unexpected_error_cancelled(downloader):
+    class CancelThenRaiseYDL(FakeYoutubeDL):
+        def download(self, urls):
+            downloader.cancel()
+            raise Exception("unexpected")
+    
+    import core.downloader as module
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(module.yt_dlp, "YoutubeDL", CancelThenRaiseYDL)
+    monkeypatch.setattr(module.yt_dlp, "utils", SimpleNamespace(DownloadError=FakeYtDlpError))
+    
+    try:
+        ok = downloader.download_playlist("http://url")
+        assert ok is False
+    finally:
+        monkeypatch.undo()
+
